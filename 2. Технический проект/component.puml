@@ -1,0 +1,83 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+skinparam rectangle {
+  BackgroundColor #1166BB
+  BorderColor #0A4D8C
+  FontColor White
+}
+skinparam database {
+  BackgroundColor #1166BB
+  BorderColor #0A4D8C
+  FontColor White
+}
+
+title Система Спортивной Статистики. Сервис аналитики. Диаграмма компонентов
+
+Container(analyticsService, "Сервис аналитики", "Python (FastAPI)", "Анализ статистики, сравнения, отчеты, прогнозирование") {
+
+    Component(analyticsController, "Analytics контроллер", "Python", "API для запросов аналитики и отчетов")
+    
+    Component(comparisonController, "Comparison контроллер", "Python", "API для сравнения игроков и команд")
+    
+    Component(predictionController, "Prediction контроллер", "Python", "API для генерации прогнозов")
+    
+    Component(statsAggregator, "Агрегатор статистики", "Python", "Агрегация данных для команд и игроков")
+    
+    Component(trendAnalyzer, "Анализатор тенденций", "Python", "Выявление динамики и трендов")
+    
+    Component(reportGenerator, "Генератор отчетов", "Python", "Создание отчетов и инфографики")
+    
+    Component(mlPredictor, "ML-модель прогнозирования", "Python (Scikit-learn/TensorFlow)", "Прогноз результатов на основе исторических данных")
+    
+    Component(statsRepository, "Репозиторий статистики", "Python (SQLAlchemy)", "Доступ к данным статистики в БД")
+    
+    Component(userRepository, "Репозиторий пользователей", "Python (SQLAlchemy)", "Доступ к предпочтениям и ролям пользователей")
+    
+    Component(authServiceClient, "Клиент Auth Service", "Python", "Проверка прав доступа и работа с OAuth2")
+    
+    Component(notificationServiceClient, "Клиент Notification Service", "Python", "Отправка уведомлений о новых аналитиках")
+
+    ' Связи внутри сервиса аналитики
+    Rel(analyticsController, statsAggregator, "Агрегирует статистику по запросу")
+    Rel(analyticsController, trendAnalyzer, "Запрашивает анализ тенденций")
+    Rel(analyticsController, reportGenerator, "Генерирует отчеты и инфографику")
+    Rel(analyticsController, comparisonController, "Делегирует запросы сравнения")
+    
+    Rel(predictionController, mlPredictor, "Запускает прогнозирование на основе модели")
+    Rel(predictionController, statsAggregator, "Получает агрегированные данные для прогноза")
+    
+    Rel(comparisonController, statsAggregator, "Получает данные для сравнения игроков/команд")
+    
+    Rel(statsAggregator, statsRepository, "Выполняет SQL-запросы для чтения/агрегации")
+    Rel(trendAnalyzer, statsRepository, "Читает исторические данные для анализа")
+    Rel(mlPredictor, statsRepository, "Читает тренировочные/исторические данные")
+    Rel(reportGenerator, statsRepository, "Читает данные для формирования отчета")
+    
+    Rel(analyticsController, authServiceClient, "Проверяет права доступа пользователя (JWT + OAuth2)")
+    Rel(predictionController, authServiceClient, "Проверяет права на доступ к прогнозам")
+    Rel(comparisonController, authServiceClient, "Проверяет права на сравнение")
+    
+    Rel(reportGenerator, userRepository, "Читает предпочтения пользователя для персонализации")
+    Rel(mlPredictor, notificationServiceClient, "Отправляет уведомление о готовом прогнозе")
+}
+
+Container_Ext(authService, "Сервис аутентификации", "Python (FastAPI)", "Аутентификация, авторизация, поддержка OAuth2 и Social Login (включая VK)")
+
+Container_Ext(notificationService, "Сервис уведомлений", "Python (FastAPI)", "Отправка уведомлений")
+
+ContainerDb(statsDb, "База данных статистики", "PostgreSQL", "Хранение статистики матчей, игроков, команд")
+ContainerDb(userDb, "База данных пользователей", "PostgreSQL", "Хранение данных пользователей, ролей, vk_id, предпочтений")
+
+Container_Ext(vkAuth, "VK OAuth API", "VK.com", "Альтернативная регистрация и вход через VK")
+
+' Внешние связи
+Rel(authServiceClient, authService, "Вызывает API аутентификации (HTTPS, JWT)")
+Rel(authServiceClient, vkAuth, "Инициирует OAuth2 flow для VK (redirect, token exchange, получение профиля)")
+
+Rel(notificationServiceClient, notificationService, "Вызывает API отправки уведомлений (HTTPS)")
+
+Rel(statsRepository, statsDb, "SQL-запросы через SQLAlchemy")
+Rel(userRepository, userDb, "SQL-запросы через SQLAlchemy")
+
+@enduml

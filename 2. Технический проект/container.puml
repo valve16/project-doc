@@ -1,0 +1,80 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+title "Система Спортивной Статистики. Диаграмма контейнеров"
+
+Person(analyst, "Спортивный аналитик", "Анализирует статистику для стратегий и тактик")
+Person(coach, "Тренер", "Просматривает статистику игроков, команды и соперников")
+Person(player, "Игрок", "Отслеживает свои достижения и сравнивает с другими")
+Person(fan, "Фанат", "Изучает результаты и статистику любимой команды или игрока")
+Person(journalist, "Журналист", "Получает данные для новостей, обзоров и прогнозов")
+Person(organizer, "Организатор турниров", "Мониторит соревнования и предоставляет статистику участникам и зрителям")
+Person(admin, "Администратор", "Модерирует контент, управляет пользователями и данными")
+Person(anon_user, "Анонимный пользователь", "Просматривает общедоступную статистику без регистрации")
+
+System_Boundary(sportsStatsSystem, "Система спортивной статистики") {
+    Container(webPortal, "Веб-портал", "Chrome 80+, Firefox, Safari; SPA на ReactJS", "Просмотр статистики, анализ, сравнения, дашборды")
+        analyst --> webPortal : "Использует для анализа данных"
+        coach --> webPortal : "Просматривает статистику команды"
+        player --> webPortal : "Отслеживает личную статистику"
+        fan --> webPortal : "Изучает результаты команды"
+        journalist --> webPortal : "Получает данные для обзоров"
+        organizer --> webPortal : "Мониторит турниры"
+        anon_user --> webPortal : "Просматривает статистику без регистрации"
+
+    Container(adminPanel, "Панель администратора", "Chrome 80+, Firefox, Safari; SPA на ReactJS", "Модерация данных, управление пользователями, аналитика")
+        admin --> adminPanel : "Администрирует систему"
+
+    Container(apiGateway, "API Gateway", "Nginx/Kong", "Маршрутизация, балансировка нагрузки, аутентификация")
+        webPortal --> apiGateway : "API запросы REST API / GraphQL : HTTPS"
+        adminPanel --> apiGateway : "API запросы REST API / GraphQL : HTTPS"
+
+    Container(authService, "Сервис аутентификации", "Python (FastAPI)", "Регистрация, вход, управление ролями и правами")
+        apiGateway --> authService : "Аутентификация и авторизация REST API : HTTPS"
+
+    Container(statsIngestionService, "Сервис сбора данных", "Python (FastAPI)", "Ввод, редактирование и интеграция статистики матчей")
+        apiGateway --> statsIngestionService : "Ввод и обновление статистики REST API : HTTPS"
+        statsIngestionService --> authService : "Проверка прав доступа REST API : HTTPS"
+
+    Container(analyticsService, "Сервис аналитики", "Python (FastAPI)", "Анализ статистики, сравнения, тенденции, отчеты")
+
+        apiGateway --> analyticsService : "Анализ и визуализация данных REST API : HTTPS"
+        analyticsService --> authService : "Проверка прав доступа REST API : HTTPS"
+
+    Container(predictionService, "Сервис прогнозирования", "Python (FastAPI)", "Прогнозы результатов на основе ML и исторических данных")
+        apiGateway --> predictionService : "Генерация прогнозов REST API : HTTPS"
+        predictionService --> analyticsService : "Получение аналитических данных REST API : HTTPS"
+
+    Container(notificationService, "Сервис уведомлений", "Python (FastAPI)", "Отправка уведомлений об обновлениях и событиях")
+        analyticsService --> notificationService : "Отправка обновлений статистики REST API : HTTPS"
+        predictionService --> notificationService : "Отправка прогнозов REST API : HTTPS"
+
+    Container(videoService, "Сервис видео-моментов", "Python (FastAPI)", "Добавление и привязка видео к событиям")
+        apiGateway --> videoService : "Управление видео REST API : HTTPS"
+
+    ContainerDb(userDb, "База данных пользователей", "PostgreSQL", "Хранение данных пользователей, ролей, предпочтений")
+        authService --> userDb : "Чтение/запись пользователей SQL"
+        analyticsService --> userDb : "Чтение пользовательских данных SQL"
+
+    ContainerDb(statsDb, "База данных статистики", "PostgreSQL", "Хранение статистики матчей, игроков, команд")
+        statsIngestionService --> statsDb : "Чтение/запись статистики SQL"
+        analyticsService --> statsDb : "Анализ статистики SQL"
+        predictionService --> statsDb : "Доступ к историческим данным SQL"
+
+    ContainerDb(videoDb, "База данных видео", "PostgreSQL", "Хранение метаданных видео-моментов")
+        videoService --> videoDb : "Чтение/запись метаданных видео SQL"
+}
+
+System_Ext(externalApis, "Внешние спортивные API", "HLTV API", "Импорт актуальной статистики")
+    statsIngestionService --> externalApis : "Импорт данных REST API : HTTPS"
+
+System_Ext(videoHosting, "Сервисы видео-хостинга", "YouTube API", "Хранение и предоставление видео")
+    videoService --> videoHosting : "Загрузка и отображение видео REST API : HTTPS"
+
+System_Ext(notificationProviders, "Провайдеры уведомлений", "SendGrid/Twilio", "Отправка email/SMS/push")
+    notificationService --> notificationProviders : "Отправка уведомлений REST API : HTTPS"
+
+System_Ext(vkAuth, "VK OAuth", "VK API", "Альтернативная регистрация и вход через VK")
+    authService --> vkAuth : "OAuth2 авторизация через VK REST API : HTTPS"
+    webPortal --> vkAuth : "Инициирует вход через VK (redirect)"
+
+@enduml
