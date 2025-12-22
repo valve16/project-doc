@@ -1,0 +1,41 @@
+@startuml
+title Sequence Diagram: Обработка и публикация статистики матча в реальном времени
+
+participant "Организатор" as Organizer
+participant "Web Portal (ReactJS)" as WebPortal
+participant "API Gateway" as Gateway
+participant "Сервис сбор данных" as Ingestion
+participant "Сервис аналитики" as Analytics
+participant "PostgreSQL" as DB
+participant "Notification Service" as Notification
+participant "Пользователь" as User
+
+== Инициация обновления в реальном времени ==
+Organizer -> WebPortal : Вводит/обновляет данные матча (гол, пас и т.д.) через UI
+WebPortal -> Gateway : Отправка данных на обновление [HTTPS POST]
+Gateway -> Ingestion : Перенаправление запроса [HTTPS]
+Ingestion -> Ingestion : Валидация данных и проверка прав (организатор)
+Ingestion -> DB : Сохранение обновлённых данных [SQL Insert/Update]
+Ingestion -> Analytics : Уведомление о новых данных [Message Queue, e.g., Kafka]
+
+== Анализ и обработка ==
+Analytics -> DB : Извлечение обновлённых данных [SQL Query]
+Analytics -> Analytics : Агрегация статистики (очки, тенденции) [Внутренняя обработка]
+alt Если требуется прогноз
+  Analytics -> Analytics : Генерация прогноза с ML-моделью
+end
+Analytics -> DB : Обновление агрегированных данных [SQL Update]
+
+== Публикация и уведомления ==
+Analytics -> Notification : Запрос на отправку уведомлений [API Call]
+Notification -> User : Отправка push/email о обновлении [Via Providers]
+WebPortal -> Gateway : Запрос обновлённой статистики (long-polling/WebSocket) [от других пользователей]
+Gateway -> Analytics : Перенаправление запроса [HTTPS]
+Analytics -> Gateway : Возврат актуальной статистики [JSON Response]
+Gateway -> WebPortal : Отправка данных [WebSocket/HTTPS]
+WebPortal -> User : Обновление UI (дашборд, инфографика) [Render]
+
+== Завершение цикла ==
+note over Organizer, WebPortal : Процесс повторяется для каждого live-события матча организатором
+
+@enduml

@@ -1,0 +1,145 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+title Спортивная Статистика — Deployment & Maintenance
+
+Person(devops, "DevOps / SRE", "Управляет инфраструктурой, мониторингом, обновлениями и инцидентами")
+Person(developer, "Разработчик", "Вносит изменения, тестирует и деплоит код")
+Person(admin, "Администратор системы", "Модерирует контент, управляет пользователями через админ-панель")
+Person(qa, "QA Engineer", "Проводит тестирование, анализирует качество")
+
+Enterprise_Boundary(cloud, "Облачная платформа (AWS / GCP / Yandex Cloud)") {
+
+    Boundary(publicNet, "Публичная сеть", "") {
+        System_Ext(vkAuth, "VK OAuth API", "VK.com", "Вход через VK (мониторинг доступности)")
+        System_Ext(externalApis, "Внешние спортивные API", "Sportradar / HLTV", "Стрим событий (мониторинг SLA)")
+        System_Ext(videoHosting, "Сервисы видео-хостинга", "YouTube API", "Хранение видео (проверка квот)")
+        System_Ext(notificationProviders, "Провайдеры уведомлений", "SendGrid/Twilio", "Email/SMS/Push (мониторинг доставляемости)")
+    }
+
+    Boundary(privateNet, "Приватная сеть приложения", "") {
+
+        ' Инфраструктура
+        Container_Boundary(infra, "Инфраструктура (Kubernetes Cluster)", "") {
+            Container(apiGateway, "API Gateway", "Kong / NGINX Ingress", "Rate limiting, circuit breaker, health checks")
+            Container(cdn, "CDN", "Cloudflare / Cloud CDN", "Кэширование статики, инвалидация при обновлениях")
+            Container(objectStorage, "Объектное хранилище", "S3 / MinIO", "Lifecycle policies, versioning, backup")
+            Container(redis, "Кэш", "Redis Cluster", "Сессии, hot data, rate limiting")
+            Container(wsGateway, "WebSocket Gateway", "Socket.io", "Real-time обновления, connection pooling")
+        }
+
+        ' Микросервисы
+        Container_Boundary(services, "Микросервисы (K8s Pods)", "") {
+            Container(webPortal, "Веб-портал", "React + TypeScript + Vite", "Canary deployments, feature flags, sourcemaps")
+            Container(adminPanel, "Панель администратора", "React + TypeScript + Vite", "Логи аудита, RBAC")
+            Container(authService, "Сервис аутентификации", "Python FastAPI", "Secret rotation, OAuth monitoring, JWT refresh")
+            Container(statsIngestionService, "Сервис сбора данных", "Python FastAPI + Celery", "Graceful shutdown, dead letter queues")
+            Container(analyticsService, "Сервис аналитики", "Python FastAPI + Pandas", "ML model registry, drift monitoring, caching")
+            Container(predictionService, "Сервис прогнозирования", "Python FastAPI + Scikit-learn", "Model versioning, A/B testing, metrics export")
+            Container(notificationService, "Сервис уведомлений", "Python FastAPI", "Dead-letter queue, rate limiting, delivery tracking")
+            Container(videoService, "Сервис видео", "Python FastAPI", "Link validation, cleanup jobs, transcoding")
+            Container(realtimeService, "Сервис реального времени", "Python FastAPI + Celery", "WebSocket management, event broadcasting")
+        }
+
+        ' Хранилища
+        Container_Boundary(db, "Хранилища данных", "") {
+            ContainerDb(userDb, "База пользователей", "PostgreSQL (RDS)", "Point-in-time recovery, vacuum, connection pooling")
+            ContainerDb(statsDb, "База статистики", "PostgreSQL + TimescaleDB", "Continuous archiving, partitioning, hypertables")
+            ContainerDb(videoDb, "База видео", "PostgreSQL", "Index maintenance, FK constraints")
+            ContainerDb(analyticsDb, "Аналитическая БД", "ClickHouse / TimescaleDB", "Materialized views, aggregations")
+            Container(messageBroker, "Message Broker", "Kafka / RabbitMQ", "Consumer lag monitoring, rebalancing, DLQ")
+        }
+
+        ' DevOps инструменты
+        Container_Boundary(ops, "DevOps Platform", "") {
+            Container(ciCd, "CI/CD Pipeline", "GitHub Actions / ArgoCD", "GitOps, automated tests, progressive delivery")
+            Container(monitoring, "Мониторинг", "Prometheus + Grafana", "SLO/SLI, golden signals, alerting")
+            Container(tracing, "Распределённая трассировка", "Jaeger + OpenTelemetry", "Request tracing, latency analysis, spans")
+            Container(logging, "Централизованные логи", "Loki + Grafana", "Log aggregation, structured logging, retention")
+            Container(alerting, "Система алертов", "Alertmanager + PagerDuty", "On-call rotation, escalation, silences")
+            Container(backup, "Бэкап и восстановление", "Velero + pg_dump + Cron", "Automated backups, disaster recovery, snapshots")
+            Container(secrets, "Менеджер секретов", "HashiCorp Vault", "Rotation, audit, dynamic secrets")
+            Container(featureFlags, "Feature Flags", "LaunchDarkly / Unleash", "Canary releases, dark launches, experimentation")
+            Container(chaos, "Chaos Engineering", "Chaos Mesh / Litmus", "Resilience testing, game days")
+            Container(vulnScanner, "Сканер уязвимостей", "Trivy + Dependabot", "CVE scanning, SBOM, auto-PR")
+            Container(testing, "Тестовые среды", "Docker + k6 + Playwright", "Automated testing, load testing, E2E")
+            Container(registry, "Контейнерный registry", "Docker Registry / Harbor", "Image storage, scanning, signing")
+        }
+    }
+}
+
+' Связи для процессов обслуживания
+Rel(devops, monitoring, "1. Просмотр метрик и дашбордов", "HTTPS")
+Rel(devops, alerting, "2. Получение и обработка алертов", "PagerDuty/Slack")
+Rel(devops, logging, "3. Анализ логов при инцидентах", "LogQL/Elastic")
+Rel(devops, tracing, "4. Исследование деградации производительности", "Jaeger UI")
+Rel(devops, ciCd, "5. Управление релизами (approve/rollback)", "GitOps/UI")
+Rel(devops, backup, "6. Проведение восстановления (DR drills)", "CLI/UI")
+Rel(devops, secrets, "7. Ротация и управление секретами", "Vault UI/API")
+Rel(devops, chaos, "8. Запуск chaos-экспериментов", "Scheduled/manual")
+Rel(devops, vulnScanner, "9. Мониторинг уязвимостей", "Reports/Notifications")
+
+Rel(developer, ciCd, "10. Push → тесты → сборка → деплой", "Git + Docker")
+Rel(developer, registry, "11. Загрузка образов", "Docker Push")
+Rel(developer, featureFlags, "12. Управление фича-флагами", "SDK/UI")
+Rel(developer, testing, "13. Запуск тестов (unit/integration/E2E)", "CI Pipeline")
+
+Rel(qa, testing, "14. Выполнение тестов и анализ результатов", "Playwright/Reports")
+Rel(qa, monitoring, "15. Мониторинг качества релиза", "Grafana Dashboards")
+Rel(qa, featureFlags, "16. А/В тестирование и эксперименты", "Feature Toggles")
+
+Rel(admin, adminPanel, "17. Администрирование через UI", "HTTPS/RBAC")
+Rel(admin, logging, "18. Просмотр аудиторских логов", "Log Search")
+
+' Внутренние связи инфраструктуры
+Rel(ciCd, registry, "19. Pull образов для деплоя", "Docker Pull")
+Rel(ciCd, services, "20. Деплой с blue-green/canary", "K8s API")
+Rel(monitoring, services, "21. Сбор метрик (Prometheus exporters)", "Scrape")
+Rel(tracing, services, "22. Инструментация OpenTelemetry", "Auto-instrumentation")
+Rel(logging, services, "23. Агрегация структурированных логов", "Fluentd/Loki")
+Rel(secrets, services, "24. Инъекция секретов в Pods", "K8s Secrets/Vault Agent")
+Rel(featureFlags, services, "25. Управление фичами в runtime", "SDK/API")
+Rel(testing, services, "26. Запуск тестов в изолированном окружении", "Test Containers")
+Rel(vulnScanner, registry, "27. Сканирование образов на уязвимости", "Image Scanning")
+Rel(backup, db, "28. Автоматическое резервное копирование", "pg_dump/S3")
+Rel(backup, objectStorage, "29. Бэкап медиафайлов", "Lifecycle Policies")
+
+' Внешние зависимости для мониторинга
+Rel(monitoring, externalApis, "30. Мониторинг доступности внешних API", "Health Checks")
+Rel(monitoring, vkAuth, "31. Мониторинг OAuth провайдера", "Availability")
+Rel(monitoring, notificationProviders, "32. Мониторинг доставки уведомлений", "Delivery Rates")
+
+note bottom of cloud
+  **Процессы обслуживания и управления:**
+  
+  **CI/CD Pipeline:**
+  - GitOps с ArgoCD для всех микросервисов
+  - Автоматические тесты: Pytest (бэкенд), Vitest (фронтенд), Playwright (E2E)
+  - Прогрессивный деплой: Canary, Blue-Green, Feature Flags
+  - Автоматический rollback при падении health checks
+  
+  **Мониторинг и Observability:**
+  - SLO/SLI: Availability 99.95%, P95 latency < 200ms
+  - Golden Signals: Traffic, Errors, Latency, Saturation
+  - On-call ротация с эскалацией через PagerDuty
+  - Distributed tracing для микросервисов
+  
+  **Безопасность:**
+  - Ежеквартальная ротация секретов через Vault
+  - Ежедневное сканирование уязвимостей (CVE)
+  - SBOM для всех контейнеров
+  - RBAC на всех уровнях
+  
+  **Резервное копирование и DR:**
+  - Ежедневные snapshot БД с 30-дневным хранением
+  - Еженедельные DR drills с измерением RTO/RPO
+  - Versioning для object storage
+  
+  **Обновления и изменения:**
+  - Canary релизы для 5% трафика
+  - Feature flags для всех новых функций
+  - Автоматическое обновление зависимостей
+  - Регулярные chaos-тесты для проверки устойчивости
+end note
+
+@enduml

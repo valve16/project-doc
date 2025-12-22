@@ -1,0 +1,154 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+title Спортивная Статистика — Infrastructure Deployment (v2)
+
+Person(user, "Пользователь", "Фанат, тренер, аналитик, журналист, организатор, игрок, админ")
+
+Enterprise_Boundary(cloud, "Облачная платформа (AWS / GCP / Yandex Cloud)", "") {
+    
+    ' === Публичная сеть (внешние зависимости) ===
+    Boundary(publicNet, "Публичная сеть", "") {
+        System_Ext(vkAuth, "VK OAuth API", "VK.com", "Вход через VK\n")
+        System_Ext(externalApis, "Внешние спортивные API", "Sportradar / HLTV", "Стрим событий матча\n")
+        System_Ext(videoHosting, "Сервисы видео-хостинга", "YouTube API", "Хранение видео-моментов\n")
+        System_Ext(notificationProviders, "Провайдеры уведомлений", "SendGrid/Twilio", "Email/SMS/Push\n")
+    }
+
+    ' === Приватная сеть приложения ===
+    Boundary(privateNet, "Приватная сеть приложения", "") {
+
+        ' === Инфраструктурные компоненты ===
+        Container_Boundary(infra, "Инфраструктура (Kubernetes Cluster)", "") {
+            Container(apiGateway, "API Gateway", "Kong / NGINX Ingress", "Маршрутизация, аутентификация\nrate limiting, circuit breaker\n")
+            Container(cdn, "CDN", "Cloudflare / Cloud CDN", "Доставка статики и видео\n")
+            Container(objectStorage, "Объектное хранилище", "S3 / MinIO", "Хранение видео, медиа, бэкапов\n")
+            Container(cache, "Кэш", "Redis Cluster", "Сессии, кэширование данных\n")
+            Container(wsGateway, "WebSocket Gateway", "Socket.io / FastAPI WebSockets", "Реальное время обновлений\n<")
+            Container(searchEngine, "Поисковый движок", "Elasticsearch", "Полнотекстовый поиск\n")
+        }
+
+        ' === Микросервисы ===
+        Container_Boundary(services, "Микросервисы (Python FastAPI)", "") {
+            Container(webPortal, "Веб-портал", "React + TypeScript + Vite", "Статистика, дашборды, визуализации\n")
+            Container(adminPanel, "Панель администратора", "React + TypeScript + Vite", "Модерация, управление пользователями\n")
+            Container(authService, "Сервис аутентификации", "Python FastAPI", "Регистрация, JWT, OAuth2, RBAC\n")
+            Container(statsService, "Сервис статистики", "Python FastAPI", "Ввод, редактирование, валидация\n")
+            Container(analyticsService, "Сервис аналитики", "Python FastAPI + Pandas", "Анализ, сравнения, тренды\n")
+            Container(predictionService, "Сервис прогнозирования", "Python FastAPI + Scikit-learn", "Прогнозы на основе ML\n")
+            Container(notificationService, "Сервис уведомлений", "Python FastAPI", "Уведомления, email/SMS/push\n")
+            Container(videoService, "Сервис видео", "Python FastAPI", "Привязка видео к событиям\n")
+            Container(realtimeService, "Сервис реального времени", "Python FastAPI + Celery", "Обработка live-событий\n <size:10>[F04, PER02]</size>")
+            Container(recommendationService, "Сервис рекомендаций", "Python FastAPI", "Персонализированные рекомендации\n <size:10>[F14]</size>")
+            Container(reportService, "Сервис отчетов", "Python FastAPI", "Генерация отчетов, инфографика\n <size:10>[F12, PER04]</size>")
+            Container(i18nService, "Сервис локализации", "Python FastAPI", "Управление переводами, форматами\n <size:10>[L10N01-L10N05]</size>")
+            Container(auditService, "Сервис аудита", "Python FastAPI", "Логирование действий пользователей\n <size:10>[SEC02, SEC03]</size>")
+            Container(archiveService, "Сервис архивации", "Python FastAPI", "Архивация и восстановление данных\n <size:10>[F06, DUR04]</size>")
+        }
+
+        ' === Хранилища данных ===
+        Container_Boundary(db, "Хранилища данных", "") {
+            ContainerDb(userDb, "База пользователей", "PostgreSQL (RDS)", "Пользователи, роли, предпочтения\n <size:10>[F01, SEC01, SEC03]</size>")
+            ContainerDb(statsDb, "База статистики", "PostgreSQL + TimescaleDB", "Матчи, игроки, команды, события\n <size:10>[F03-F10, SCA01, SCA07]</size>")
+            ContainerDb(videoDb, "База видео", "PostgreSQL", "Метаданные видео-моментов\n <size:10>[F11]</size>")
+            ContainerDb(auditDb, "База аудита", "PostgreSQL", "Логи действий пользователей\n <size:10>[SEC02]</size>")
+            ContainerDb(analyticsDb, "Аналитическая БД", "ClickHouse", "Агрегированные данные, аналитика\n <size:10>[F08-F10, PER04, SCA01]</size>")
+            Container(messageBroker, "Message Broker", "Kafka", "Асинхронная обработка событий\n <size:10>[F04, PER02, SCA06]</size>")
+        }
+
+        ' === DevOps и мониторинг ===
+        Container_Boundary(ops, "DevOps и наблюдаемость", "") {
+            Container(ciCd, "CI/CD Pipeline", "GitHub Actions / ArgoCD", "Автоматическая сборка и деплой\n <size:10>[MON01-MON03]</size>")
+            Container(monitoring, "Мониторинг", "Prometheus + Grafana", "Метрики, дашборды, алертинг\n <size:10>[MON01-MON03, PER01-PER05]</size>")
+            Container(logging, "Централизованные логи", "Loki + Grafana", "Агрегация и анализ логов\n <size:10>[MON01, SEC02]</size>")
+            Container(tracing, "Трассировка", "Jaeger", "Распределенная трассировка\n <size:10>[MON01, PER01]</size>")
+            Container(backup, "Система бэкапов", "Velero + pg_dump", "Резервное копирование, восстановление\n <size:10>[DUR01-DUR04]</size>")
+        }
+    }
+}
+
+' === Внешние взаимодействия ===
+Rel(user, cdn, "1. Загружает SPA (статику)", "HTTPS\n <size:10>[PLT01-PLT04]</size>")
+Rel(user, apiGateway, "2. Отправляет API-запросы", "HTTPS\n <size:10>[PER01]</size>")
+Rel(user, wsGateway, "3. Подключается для real-time", "WebSocket\n <size:10>[PER02]</size>")
+Rel(user, vkAuth, "4. Авторизуется через VK", "OAuth2\n <size:10>[F01]</size>")
+
+Rel(externalApis, statsService, "5. Стримит события матчей", "WebSocket/HTTPS\n <size:10>[F05, PER02]</size>")
+Rel(vkAuth, authService, "6. Обменивает код на токен", "HTTPS\n <size:10>[SEC01]</size>")
+Rel(videoService, videoHosting, "7. Загрузка/отображение видео", "HTTPS\n <size:10>[F11, LRC01]</size>")
+Rel(notificationService, notificationProviders, "8. Отправка уведомлений", "HTTPS\n <size:10>[F15]</size>")
+
+' === Внутренние связи инфраструктуры ===
+Rel(cdn, webPortal, "9. Забирает статику", "Internal")
+Rel(cdn, adminPanel, "10. Забирает статику", "Internal")
+
+Rel(webPortal, apiGateway, "11. API запросы (REST/GraphQL)", "HTTPS Internal")
+Rel(adminPanel, apiGateway, "12. API запросы (REST/GraphQL)", "HTTPS Internal")
+Rel(webPortal, wsGateway, "13. Подписка на real-time события", "WebSocket Internal")
+
+' === Связи через API Gateway ===
+Rel(apiGateway, authService, "14. Аутентификация/авторизация", "HTTPS Internal")
+Rel(apiGateway, statsService, "15. Статистика матчей и игроков", "HTTPS Internal")
+Rel(apiGateway, analyticsService, "16. Аналитика и сравнения", "HTTPS Internal")
+Rel(apiGateway, predictionService, "17. Прогнозы и ML", "HTTPS Internal")
+Rel(apiGateway, notificationService, "18. Управление уведомлениями", "HTTPS Internal")
+Rel(apiGateway, videoService, "19. Управление видео", "HTTPS Internal")
+Rel(apiGateway, realtimeService, "20. Real-time события", "HTTPS Internal")
+Rel(apiGateway, recommendationService, "21. Персональные рекомендации", "HTTPS Internal")
+Rel(apiGateway, reportService, "22. Генерация отчетов", "HTTPS Internal")
+Rel(apiGateway, i18nService, "23. Локализация и форматы", "HTTPS Internal")
+Rel(apiGateway, auditService, "24. Аудит действий", "HTTPS Internal")
+Rel(apiGateway, archiveService, "25. Архивация данных", "HTTPS Internal")
+
+' === Асинхронные связи через Message Broker ===
+Rel(statsService, messageBroker, "26. Публикация событий матчей", "Async (Kafka)")
+Rel(realtimeService, messageBroker, "27. Обработка live-событий", "Async (Kafka)")
+Rel(analyticsService, messageBroker, "28. Подписка на обновления", "Async (Kafka)")
+Rel(predictionService, messageBroker, "29. Получение данных для ML", "Async (Kafka)")
+Rel(notificationService, messageBroker, "30. Триггеры уведомлений", "Async (Kafka)")
+
+' === Связи с базами данных ===
+Rel(authService, userDb, "31. Чтение/запись пользователей", "SQL")
+Rel(statsService, statsDb, "32. Статистика матчей и игроков", "SQL")
+Rel(analyticsService, statsDb, "33. Анализ статистики", "SQL")
+Rel(predictionService, statsDb, "34. Исторические данные для ML", "SQL")
+Rel(videoService, videoDb, "35. Метаданные видео", "SQL")
+Rel(auditService, auditDb, "36. Логи действий", "SQL")
+Rel(analyticsService, analyticsDb, "37. Агрегированные данные", "SQL")
+Rel(reportService, analyticsDb, "38. Данные для отчетов", "SQL")
+
+' === Связи с инфраструктурными сервисами ===
+Rel(analyticsService, cache, "39. Кэширование запросов", "Redis")
+Rel(authService, cache, "40. Сессии пользователей", "Redis")
+Rel(webPortal, cache, "41. Кэширование UI-данных", "Redis")
+Rel(searchEngine, statsService, "42. Индексация данных", "HTTP Internal")
+Rel(analyticsService, searchEngine, "43. Поиск по статистике", "HTTP Internal")
+
+' === Связи для архивации и бэкапов ===
+Rel(archiveService, objectStorage, "44. Хранение архивных данных", "S3 API")
+Rel(backup, userDb, "45. Резервное копирование", "pg_dump")
+Rel(backup, statsDb, "46. Резервное копирование", "pg_dump")
+Rel(backup, videoDb, "47. Резервное копирование", "pg_dump")
+Rel(backup, auditDb, "48. Резервное копирование", "pg_dump")
+
+' === Связи мониторинга ===
+Rel(monitoring, services, "49. Сбор метрик (Prometheus)", "Scrape")
+Rel(logging, services, "50. Агрегация логов (Loki)", "Log Push")
+Rel(tracing, services, "51. Инструментация трассировки", "OpenTelemetry")
+Rel(ciCd, services, "52. Автоматический деплой", "K8s API")
+
+note right of cloud
+<size:12><b>Ключевые нефункциональные требования:</b></size>
+• Доступность: 99.9% (AVA01)
+• Время реакции: <1с (PER01)
+• Real-time задержка: <2с (PER02)
+• Одновременных пользователей: 10K→1M (SCA02-SCA05)
+• Резервное копирование: ежедневно (DUR01)
+• Восстановление: RTO<30мин, RPO<5мин (DUR02)
+• Мониторинг: Prometheus+Grafana (MON01)
+• Языки: русский, английский (L10N01-L10N02)
+• Браузеры: Chrome, Firefox, Safari, Edge (PLT01)
+• Бюджет: ~5 млн руб (LIM04)
+end note
+
+@enduml
